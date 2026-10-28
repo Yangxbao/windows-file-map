@@ -27,11 +27,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fm_kb as kb
+import fm_clean
 
 TOOL_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(TOOL_DIR, "fmdata.db")
 PROGRESS_PATH = os.path.join(TOOL_DIR, "scan_progress.json")
 PORT_START = 8618
+PORT = PORT_START  # main() 绑定成功后回写，用于 Host/Origin 校验
 
 MIME = {
     ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
@@ -67,6 +69,18 @@ def q_escape(s):
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
+
+    # ---------------- 来源校验（防 DNS 重绑定 / 跨站调用） ----------------
+    def _check_origin(self):
+        """清理类等会改动本机状态的接口必须来自本机页面"""
+        host = (self.headers.get("Host") or "").lower()
+        if host not in ("127.0.0.1:%d" % PORT, "localhost:%d" % PORT):
+            return "Host 头异常（%s），已拒绝" % host[:80]
+        origin = self.headers.get("Origin")
+        if origin and origin.lower() not in (
+                "http://127.0.0.1:%d" % PORT, "http://localhost:%d" % PORT):
+            return "Origin 来源异常（%s），已拒绝" % origin[:80]
+        return None
 
     def _send(self, code, body, ctype="application/json; charset=utf-8"):
         b = body.encode("utf-8") if isinstance(body, str) else body
@@ -246,10 +260,90 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"ok": False, "error": str(e)}, 500)
 
     # ---------------- 路由 ----------------
+    # ---------------- 清理模块 API（只接受规则 ID，绝不接受路径） ----------------
+    def api_clean_categories(self):
+        return self._json({"ok": True, "categories": fm_clean.list_categories(),
+                           "default_ids": fm_clean.DEFAULT_CATEGORY_IDS,
+                           "never_clean": fm_clean.NEVER_CLEAN_TEXT,
+                           "policy_accepted": fm_clean.get_policy()})
+
+    def api_clean_status(self):
+        return self._json(fm_clean.status())
+
+    def api_clean_history(self):
+        return self._json({"ok": True, "items": fm_clean.get_history(50)})
+
+    def api_clean_log(self, qs):
+        try:
+            run_id = int((qs.get("run_id") or ["0"])[0])
+        except ValueError:
+            return self._json({"ok": False, "error": "run_id 不合法"}, 400)
+        return self._json({"ok": True, "items": fm_clean.get_run_log(run_id)})
+
+    def do_POST(self):
+        u = urllib.parse.urlparse(self.path)
+        path = urllib.parse.unquote(u.path)
+        bad = self._check_origin()
+        if bad:
+            return self._json({"ok": False, "error": bad}, 403)
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        if length > 64 * 1024:
+            return self._json({"ok": False, "error": "请求体过大"}, 400)
+        try:
+            body = json.loads(self.rfile.read(length).decode("utf-8")) if length else {}
+        except (ValueError, UnicodeDecodeError):
+            return self._json({"ok": False, "error": "请求体不是合法 JSON"}, 400)
+        if not isinstance(body, dict):
+            return self._json({"ok": False, "error": "请求体必须是 JSON 对象"}, 400)
+
+        if path == "/api/clean/enable":
+            # 一次性确认：记录用户已知晓并启用安全清理范围
+            fm_clean.set_policy()
+            return self._json({"ok": True, "policy_accepted": True})
+
+        if path in ("/api/clean/scan", "/api/clean/run"):
+            if "paths" in body or "path" in body:
+                return self._json(
+                    {"ok": False, "error": "出于安全考虑，清理接口不接受任何路径参数，"
+                                           "只能选择预定义的清理类别"}, 400)
+            cats = body.get("categories")
+            if cats is None:
+                cats = fm_clean.DEFAULT_CATEGORY_IDS
+            if not isinstance(cats, list) or not cats or \
+                    not all(isinstance(c, str) for c in cats):
+                return self._json({"ok": False, "error": "categories 必须是非空字符串数组"}, 400)
+            known = {r["id"] for r in fm_clean._rules()}
+            unknown = [c for c in cats if c not in known]
+            if unknown:
+                return self._json({"ok": False,
+                                   "error": "未知的清理类别：%s" % "、".join(unknown)}, 400)
+            if path == "/api/clean/scan":
+                result = fm_clean.scan(cats)
+                return self._json(result)
+            # run 需要一次性确认已启用
+            if not fm_clean.get_policy():
+                return self._json(
+                    {"ok": False, "error": "尚未确认启用安全清理。请先在页面上查看清理范围并"
+                                           "点击「启用安全清理」（一次性确认）。"}, 403)
+            return self._json(fm_clean.run(cats))
+
+        if path == "/api/clean/cancel":
+            return self._json(fm_clean.cancel())
+
+        return self._json({"ok": False, "error": "未知接口"}, 404)
+
     def do_GET(self):
         u = urllib.parse.urlparse(self.path)
         path = urllib.parse.unquote(u.path)
         qs = urllib.parse.parse_qs(u.query)
+        # 会改动本机状态的接口（打开资源管理器）同样做来源校验
+        if path == "/api/open":
+            bad = self._check_origin()
+            if bad:
+                return self._json({"ok": False, "error": bad}, 403)
         try:
             if path == "/api/summary":
                 return self.api_summary()
@@ -267,6 +361,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self.api_events(qs)
             if path == "/api/progress":
                 return self.api_progress()
+            if path == "/api/clean/categories":
+                return self.api_clean_categories()
+            if path == "/api/clean/status":
+                return self.api_clean_status()
+            if path == "/api/clean/history":
+                return self.api_clean_history()
+            if path == "/api/clean/log":
+                return self.api_clean_log(qs)
             if path == "/api/open":
                 return self.api_open(qs)
             if path == "/api/ping":
@@ -320,6 +422,8 @@ def main():
     if srv is None:
         print("无法绑定本地端口（8618-8637 均被占用）。")
         return 1
+    global PORT
+    PORT = port
     url = "http://127.0.0.1:%d/" % port
     print("=" * 54)
     print("  文件地图助手 · 本地服务已启动（只读）")

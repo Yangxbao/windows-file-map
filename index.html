@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>我的电脑文件地图 · 文件地图助手 v2</title>
+<title>本机文件地图与一键清理助手</title>
 <style>
 :root{
   --bg:#f5f7fa; --card:#ffffff; --line:#e4e9f0; --txt:#1f2937; --sub:#6b7280;
@@ -93,10 +93,11 @@ details summary{cursor:pointer;color:var(--brand);font-size:12px}
 </head>
 <body>
 <header>
-  <div class="brand">🗂️ 我的电脑文件地图 <small>v2 全量盘点 · 只读 · 未修改任何原始文件</small></div>
+  <div class="brand">🗂️ 本机文件地图与一键清理助手 <small>只读盘点 + 白名单安全清理 · 未确认绝不删除</small></div>
   <div class="meta-line" id="metaLine"></div>
   <nav id="tabs">
     <button data-page="overview" class="on">📊 电脑总览</button>
+    <button data-page="clean">🧹 一键清理</button>
     <button data-page="tree">🌳 目录树</button>
     <button data-page="projects">🧩 项目地图</button>
     <button data-page="search">🔍 全局搜索</button>
@@ -168,8 +169,8 @@ function toast(t){
   const el=$("#toast");el.textContent=t;el.style.opacity=1;
   clearTimeout(el._t);el._t=setTimeout(()=>el.style.opacity=0,2200);
 }
-async function api(path){
-  const r=await fetch(path);
+async function api(path, opts){
+  const r=await fetch(path, opts||{});
   const j=await r.json();
   if(j && j.ok===false) throw new Error(j.error||("HTTP "+r.status));
   return j;
@@ -231,6 +232,7 @@ function initTabs(){
 }
 function render(){
   if(curPage==="overview")pageOverview();
+  else if(curPage==="clean")pageClean();
   else if(curPage==="tree")pageTree();
   else if(curPage==="projects")pageProjects();
   else if(curPage==="search")pageSearch();
@@ -685,10 +687,157 @@ async function pageRisk(){
   });
 }
 
+/* ==================== 页面：一键清理 ==================== */
+let CLEAN_CATS=null, cleanTimer=null;
+async function pageClean(){
+  main.innerHTML='<div class="muted">加载清理模块…</div>';
+  let C;
+  try{C=await api("/api/clean/categories");}
+  catch(e){main.innerHTML='<div class="card">清理模块加载失败：'+esc(e.message)+"</div>";return;}
+  CLEAN_CATS=C;
+  let h='<div class="notice">🧹 <b>一键清理垃圾</b> 只清理下面白名单中<b>明确安全、可自动重建</b>的临时文件与缓存。'
+    +"所有规则内置在程序里，页面无法指定任何路径；被占用/只读/无法确认的对象一律跳过并记录原因。"
+    +"每个被删除的文件都写入日志（可追溯）。</div>";
+  if(!C.policy_accepted){
+    h+='<div class="card" id="policyCard"><h2>首次使用：请确认安全清理范围</h2>'
+      +'<p>启用后，以后点击「一键清理垃圾」都会直接按以下范围执行，不再逐项询问：</p>'
+      +'<table><tr><th>类别</th><th>位置</th><th>说明</th></tr>'
+      +C.categories.map(c=>`<tr><td><b>${esc(c.name)}</b></td><td class="mono">${esc(c.roots.join(" ； "))}</td><td class="muted">${esc(c.desc)}</td></tr>`).join("")+"</table>"
+      +'<div class="warnbox" style="margin-top:10px"><b>永远不会清理：</b>'+C.never_clean.map(esc).join("；")+"</div>"
+      +'<p style="margin-top:10px"><button class="btn primary" id="policyBtn">✅ 我已了解清理范围，启用安全清理</button>'
+      +' <span class="muted">这是一次性确认，之后的一键操作都只执行以上白名单。</span></p></div>';
+  }
+  h+=`<div class="card">
+    <h2>🧹 一键清理垃圾</h2>
+    <p style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn primary" id="oneBtn" style="font-size:16px;padding:10px 22px">🧹 一键清理垃圾</button>
+      <button class="btn" id="prevBtn">🔍 仅预览，不删除</button>
+      <button class="btn" id="cancelBtn" style="display:none">⏹ 取消</button>
+      <span class="hint" id="cleanHint"></span>
+    </p>
+    <div id="cleanStatus"></div>
+  </div>
+  <div class="card" id="resultCard" style="display:none"></div>
+  <div class="card"><h2>🧾 清理记录（保存在本机数据库中）</h2>
+    <div id="histBox" class="muted">加载中…</div>
+  </div>`;
+  main.innerHTML=h;
+  const pb=$("#policyBtn");
+  if(pb)pb.addEventListener("click",async()=>{
+    try{
+      await api("/api/clean/enable",{method:"POST"});
+      toast("已启用安全清理（可随时查看清理记录）");
+      pageClean();
+    }catch(e){toast("启用失败："+e.message);}
+  });
+  $("#oneBtn").addEventListener("click",()=>doClean(true));
+  $("#prevBtn").addEventListener("click",()=>doClean(false));
+  $("#cancelBtn").addEventListener("click",async()=>{
+    try{await api("/api/clean/cancel",{method:"POST"});toast("已请求取消，正在停止后续删除…");}catch(e){}
+  });
+  loadHistory();
+}
+async function doClean(run){
+  const btn=$("#oneBtn"),pv=$("#prevBtn"),hint=$("#cleanHint");
+  btn.disabled=pv.disabled=true;
+  hint.textContent=run?"正在扫描并清理（可取消）…":"正在预览扫描…";
+  try{
+    const j=await api("/api/clean/"+(run?"run":"scan"),{method:"POST"});
+    if(run){pollStatus();}
+    else{showResults(j,null);hint.textContent="";btn.disabled=pv.disabled=false;}
+  }catch(e){hint.textContent="";toast("操作失败："+e.message);btn.disabled=pv.disabled=false;}
+}
+async function pollStatus(){
+  clearTimeout(cleanTimer);
+  try{
+    const j=await api("/api/clean/status");
+    const st=$("#cleanStatus");
+    if(j.phase==="running"||j.phase==="cancelling"||(j.phase||"").startsWith("running:")){
+      const cat=(j.phase||"").replace("running:","")||"…";
+      const t=j.totals||{};
+      st.innerHTML='<div class="livebox">🔄 状态：'+esc(j.phase)+
+        "　候选 "+fmtInt(t.candidates||0)+"　已清理 "+fmtInt(t.deleted||0)+
+        "　跳过 "+fmtInt(t.skipped||0)+"　已释放约 <b>"+fmtSize(t.freed_bytes||0)+"</b></div>";
+      $("#cancelBtn").style.display="";
+      cleanTimer=setTimeout(pollStatus,500);
+      return;
+    }
+    $("#cancelBtn").style.display="none";
+    $("#oneBtn").disabled=false;$("#prevBtn").disabled=false;
+    $("#cleanHint").textContent="";
+    if(j.phase==="done"||j.phase==="cancelled"){
+      const his=await api("/api/clean/history");
+      const last=his.items[0];
+      showResults({ok:true,results:j.results,totals:j.totals,notes:[]},last);
+      toast(j.phase==="cancelled"?"已取消：未开始的清理已停止":"清理完成");
+    }else if(j.phase==="error"){
+      st.innerHTML='<div class="warnbox">清理出错：'+esc(j.error||"")+"（已删除的部分仍记录在日志中）</div>";
+    }
+  }catch(e){$("#cleanHint").textContent="状态查询失败："+e.message;}
+}
+function showResults(j,runRow){
+  const card=$("#resultCard");
+  card.style.display="";
+  const t=j.totals||{};
+  let h="<h2>🧾 本次清理结果"+(j.phase==="scan_done"?"（预览，未删除任何文件）":"")+"</h2>";
+  if((t.candidates||0)===0){
+    h+='<div class="notice">✅ <b>没有发现符合安全规则的垃圾文件</b>——本工具绝不会为了显示效果而强行删除东西。</div>';
+  }else{
+    h+='<table><tr><th>类别</th><th>候选</th><th>已清理</th><th>跳过</th><th>失败</th><th>释放空间</th></tr>'
+      +(j.results||[]).map(r=>`<tr><td>${esc(r.name)}</td><td>${fmtInt(r.candidates)}</td>
+        <td><b>${fmtInt(r.deleted||0)}</b></td><td>${fmtInt(r.skipped||0)}</td>
+        <td>${fmtInt(r.failed||0)}</td><td><b>${fmtSize(r.freed_bytes||0)}</b></td></tr>`).join("")+
+      `<tr><th>合计</th><th>${fmtInt(t.candidates||0)}</th><th>${fmtInt(t.deleted||0)}</th>
+       <th>${fmtInt(t.skipped||0)}</th><th>${fmtInt(t.failed||0)}</th>
+       <th>${fmtSize(t.freed_bytes||0)}${j.phase==="scan_done"?"（预计）":""}</th></tr></table>`;
+    if(j.notes&&j.notes.length)h+='<details><summary>扫描说明与跳过原因（'+j.notes.length+' 条）</summary><ul>'
+      +j.notes.map(n=>"<li class='muted'>"+esc(n)+"</li>").join("")+"</ul></details>";
+    if(runRow)h+='<p class="muted">运行记录 #'+runRow.id+'（'+esc(runRow.started||"")+"，状态 "+esc(runRow.status||"")+'）　'
+      +'<button class="btn mini" id="logBtn">查看逐文件日志</button></p><div id="logBox"></div>';
+    if((t.deleted||0)===0&&(t.candidates||0)>0&&(j.phase!=="scan_done"))
+      h+='<p class="muted">本次候选对象全部被安全跳过（多为正在使用或权限不足），没有删除任何文件。</p>';
+  }
+  card.innerHTML=h;
+  const lb=$("#logBtn");
+  if(lb)lb.addEventListener("click",async()=>{
+    const box=$("#logBox");
+    box.innerHTML='<p class="muted">加载中…</p>';
+    const j2=await api("/api/clean/log?run_id="+runRow.id);
+    box.innerHTML='<table><tr><th>规则</th><th>结果</th><th>路径</th><th>大小</th><th>说明</th></tr>'
+      +j2.items.slice(0,300).map(x=>`<tr><td>${esc(x.rule_id)}</td>
+        <td>${x.status==="deleted"?'<span class="badge b-green">已删除</span>':x.status==="skipped"?'<span class="badge b-gray">跳过</span>':x.status==="failed"?'<span class="badge b-red">失败</span>':esc(x.status)}</td>
+        <td class="mono">${esc(x.path)}</td><td>${x.size!=null?fmtSize(x.size):"—"}</td>
+        <td class="muted">${esc(x.reason||"")}</td></tr>`).join("")+"</table>"
+      +(j2.items.length>=300?"<p class='muted'>仅显示前 300 条，完整记录见数据库 clean_log 表。</p>":"");
+  });
+}
+async function loadHistory(){
+  const box=$("#histBox");
+  try{
+    const j=await api("/api/clean/history");
+    if(!j.items.length){box.innerHTML='<p class="muted">还没有清理记录。第一次清理后，这里会显示每次的时间、类别、数量与释放空间。</p>';return;}
+    box.innerHTML='<table><tr><th>时间</th><th>状态</th><th>类别</th><th>候选</th><th>已清理</th><th>跳过</th><th>释放</th><th>日志</th></tr>'
+      +j.items.map(r=>`<tr><td>${esc(r.started||"")}</td>
+        <td>${r.status==="done"?'<span class="badge b-green">完成</span>':r.status==="cancelled"?'<span class="badge b-yellow">已取消</span>':esc(r.status)}</td>
+        <td class="muted">${esc((r.categories||"").slice(1,60))}</td>
+        <td>${fmtInt(r.candidates||0)}</td><td><b>${fmtInt(r.deleted||0)}</b></td>
+        <td>${fmtInt(r.skipped||0)}</td><td>${fmtSize(r.freed_bytes||0)}</td>
+        <td><button class="btn mini" data-run="${r.id}">逐文件</button></td></tr>`).join("")+"</table>";
+    box.querySelectorAll("[data-run]").forEach(b=>b.addEventListener("click",async()=>{
+      const j2=await api("/api/clean/log?run_id="+b.dataset.run);
+      box.innerHTML='<p><button class="btn mini" id="backHist">← 返回记录列表</button>　运行 #'+esc(b.dataset.run)+' 的逐文件日志（前 300 条）</p>'
+        +'<table><tr><th>结果</th><th>路径</th><th>大小</th><th>说明</th></tr>'
+        +j2.items.slice(0,300).map(x=>`<tr><td>${esc(x.status)}</td><td class="mono">${esc(x.path)}</td>
+          <td>${x.size!=null?fmtSize(x.size):"—"}</td><td class="muted">${esc(x.reason||"")}</td></tr>`).join("")+"</table>";
+      $("#backHist").addEventListener("click",loadHistory);
+    }));
+  }catch(e){box.innerHTML="加载失败："+esc(e.message);}
+}
+
 /* ==================== 启动 ==================== */
 async function boot(){
-  $("#foot").innerHTML="文件地图助手 v2 · 全量只读递归扫描 · 数据存储于本目录 SQLite 数据库（fmdata.db），"+
-    "可随时用 重新扫描.bat / --incremental 增量更新";
+  $("#foot").innerHTML="本机文件地图与一键清理助手 · 只读盘点 + 白名单安全清理 · 数据保存在本工具目录（fmdata.db）"+
+    " · 全量盘点用 重新扫描.bat，日常更新用 python fm_scan.py --incremental";
   try{
     SUMMARY = await api("/api/summary");
   }catch(e){
