@@ -1,0 +1,18 @@
+# 个人扫描数据（含本机完整文件清单，严禁上传）
+fmdata.db
+fmdata.db-wal
+fmdata.db-shm
+scan_progress.json
+scan_summary.json
+目录总览*.csv
+扫描范围与遗漏.md
+项目识别报告.md
+安全与整理建议.md
+data.js
+data.json
+
+# Python
+__pycache__/
+*.pyc
+fm_diag*.py
+fm_check*.py

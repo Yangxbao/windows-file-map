@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>我的电脑文件地图 · 文件地图助手 v2</title>
+<style>
+:root{
+  --bg:#f5f7fa; --card:#ffffff; --line:#e4e9f0; --txt:#1f2937; --sub:#6b7280;
+  --brand:#2563eb; --ok:#16a34a; --warn:#d97706; --bad:#dc2626;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Microsoft YaHei UI","Microsoft YaHei","PingFang SC",system-ui,sans-serif;
+  background:var(--bg);color:var(--txt);font-size:14px}
+header{background:#fff;border-bottom:1px solid var(--line);padding:10px 18px 0;position:sticky;top:0;z-index:50}
+.brand{font-size:18px;font-weight:700}
+.brand small{color:var(--sub);font-weight:400;margin-left:8px}
+.meta-line{color:var(--sub);font-size:12px;margin-top:2px}
+nav{display:flex;gap:4px;margin-top:10px;flex-wrap:wrap}
+nav button{border:none;background:none;padding:8px 14px;font-size:14px;cursor:pointer;color:var(--sub);
+  border-bottom:2px solid transparent}
+nav button.on{color:var(--brand);border-bottom-color:var(--brand);font-weight:600}
+main{max-width:1320px;margin:14px auto;padding:0 14px}
+footer{max-width:1320px;margin:20px auto;padding:10px 14px;color:var(--sub);font-size:12px;line-height:1.8}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:14px}
+.card h2{font-size:15px;margin:0 0 10px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:14px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.stat .v{font-size:21px;font-weight:700;color:var(--brand)}
+.stat .k{color:var(--sub);font-size:12px;margin-top:2px;line-height:1.5}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--sub);font-weight:600;white-space:nowrap}
+code,.mono{font-family:Consolas,"Courier New",monospace;font-size:12px;word-break:break-all}
+.badge{display:inline-block;padding:1px 7px;border-radius:9px;font-size:11px;color:#fff;margin-right:4px;white-space:nowrap}
+.b-gray{background:#94a3b8}.b-blue{background:#3b82f6}.b-green{background:#22c55e}
+.b-red{background:#ef4444}.b-orange{background:#f97316}.b-purple{background:#a855f7}
+.b-cyan{background:#06b6d4}.b-yellow{background:#eab308}
+.notice{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;
+  color:#1e40af;font-size:13px;margin-bottom:14px;line-height:1.7}
+.warnbox{background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;color:#92400e;
+  font-size:13px;margin-bottom:14px;line-height:1.7}
+.livebox{background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;padding:10px 12px;color:#065f46;
+  font-size:13px;margin-bottom:14px;line-height:1.7}
+.toolbar{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.toolbar select,.toolbar input{padding:6px 10px;border:1px solid var(--line);border-radius:8px;font-size:14px}
+.toolbar input{width:380px}
+.hint{color:var(--sub);font-size:12px}
+.tree-wrap{display:flex;gap:12px;align-items:flex-start}
+.tree{flex:1;min-width:0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px}
+.detail{width:430px;flex-shrink:0;background:var(--card);border:1px solid var(--line);border-radius:10px;
+  padding:14px;position:sticky;top:110px;max-height:calc(100vh - 130px);overflow:auto}
+.detail .path{background:#f1f5f9;border-radius:6px;padding:6px 8px;font-family:Consolas,monospace;
+  font-size:12px;word-break:break-all;margin:6px 0;user-select:all;cursor:text}
+.row{display:flex;align-items:center;gap:6px;padding:3px 6px;border-radius:6px;cursor:pointer;line-height:1.5}
+.row:hover{background:#eef2ff}
+.row.sel{background:#dbeafe}
+.row .tg{width:16px;flex-shrink:0;text-align:center;color:var(--sub);font-size:11px;cursor:pointer}
+.row .nm{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:38%}
+.row .zh{color:var(--sub);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+.row .sz{color:var(--sub);font-size:12px;white-space:nowrap}
+.row .badge{margin-right:0}
+.kids{margin-left:20px;border-left:1px dashed var(--line);padding-left:4px}
+.more{color:var(--brand);cursor:pointer;font-size:12px;padding:4px 6px}
+.btn{display:inline-block;border:1px solid var(--line);background:#fff;border-radius:8px;
+  padding:5px 12px;cursor:pointer;font-size:13px;text-decoration:none;color:var(--txt)}
+.btn:hover{border-color:var(--brand);color:var(--brand)}
+.btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn.mini{padding:2px 8px;font-size:12px;border-radius:6px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.chip{border:1px solid var(--line);background:#fff;border-radius:14px;padding:3px 12px;cursor:pointer;font-size:12px}
+.chip.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:12px}
+.pcard{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.pcard .t{font-weight:700;font-size:14px;margin-bottom:4px}
+.pcard .kv{font-size:12px;color:var(--sub);margin:2px 0;line-height:1.6}
+.pcard .kv b{color:var(--txt);font-weight:600}
+.bar{height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden;margin-top:3px}
+.bar i{display:block;height:100%;background:var(--brand)}
+.mark{background:#fef08a;border-radius:2px}
+.muted{color:var(--sub);font-size:12px}
+.sec{margin-bottom:8px}
+details summary{cursor:pointer;color:var(--brand);font-size:12px}
+#toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:#1f2937;color:#fff;
+  padding:8px 18px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .3s;z-index:99;pointer-events:none}
+#modal{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;z-index:98}
+#modal .box{background:#fff;border-radius:12px;padding:20px;max-width:540px;width:92%}
+#modal h3{margin-top:0}
+.flash{animation:fl 1.6s ease}
+@keyframes fl{0%{background:#fde68a}100%{background:transparent}}
+@media (max-width:980px){.tree-wrap{flex-direction:column}.detail{width:100%;position:static}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">🗂️ 我的电脑文件地图 <small>v2 全量盘点 · 只读 · 未修改任何原始文件</small></div>
+  <div class="meta-line" id="metaLine"></div>
+  <nav id="tabs">
+    <button data-page="overview" class="on">📊 电脑总览</button>
+    <button data-page="tree">🌳 目录树</button>
+    <button data-page="projects">🧩 项目地图</button>
+    <button data-page="search">🔍 全局搜索</button>
+    <button data-page="risk">⚠️ 空间与风险</button>
+  </nav>
+</header>
+<main id="main"></main>
+<footer id="foot"></footer>
+<div id="toast"></div>
+<div id="modal"><div class="box" id="modalBox"></div></div>
+
+<script src="server-mode.js"></script>
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const main = $("#main");
+let SUMMARY = null;   // /api/summary 结果
+
+const CATS = {
+  sys:["系统目录","#64748b"], user:["个人目录","#2563eb"], devtool:["开发环境","#7c3aed"],
+  project:["开发项目","#16a34a"], deps:["依赖目录","#d97706"], build:["构建产物","#ea580c"],
+  git:["Git 版本库","#0f766e"], docs:["文档资料","#0369a1"], code:["代码","#4f46e5"],
+  media:["图片","#db2777"], video:["视频","#be185d"], audio:["音频","#a21caf"],
+  archive:["压缩包","#b45309"], exe:["程序/安装包","#dc2626"], data:["数据文件","#0891b2"],
+  cfg:["配置文件","#6d28d9"], sensitive:["疑似敏感","#e11d48"], cache:["缓存","#94a3b8"],
+  unknown:["用途待确认","#f59e0b"], other:["其他","#6b7280"]
+};
+const SCANNED = {0:"未扫描",1:"完成",2:"部分扫描",3:"枚举失败",4:"规则排除",5:"已不存在"};
+const SCANNED_CLS = {0:"b-gray",1:"b-green",2:"b-yellow",3:"b-red",4:"b-gray",5:"b-gray"};
+const ERR_LABELS = {denied:"拒绝访问",missing:"对象丢失",locked:"被占用",longpath:"路径超长",
+                    readlink:"链接目标读取失败",ioerror:"IO 错误",excluded:"规则排除"};
+const ATTR_BITS = [[1,"只读"],[2,"隐藏"],[4,"系统"],[0x20,"存档"],[0x400,"链接"]];
+
+function esc(s){return String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+function fmtSize(n){
+  if(n==null||n===undefined) return "未统计";
+  if(n<1024) return n+" B";
+  const u=["KB","MB","GB","TB"];let v=n/1024,i=0;
+  while(v>=1024&&i<u.length-1){v/=1024;i++;}
+  return v.toFixed(1)+" "+u[i];
+}
+function fmtTime(m){
+  if(!m) return "—";
+  const d=new Date(m*1000),p=x=>String(x).padStart(2,"0");
+  return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes());
+}
+function fmtInt(n){return (n??0).toLocaleString("zh-CN");}
+function catBadge(c){
+  const cat=CATS[c]||["其他","#6b7280"];
+  return '<span class="badge" style="background:'+cat[1]+'">'+esc(cat[0])+"</span>";
+}
+function flagBadges(f,scanned){
+  let h="";
+  if(scanned!==undefined && scanned!==1 && !(f&64))
+    h+='<span class="badge '+ (SCANNED_CLS[scanned]||"b-gray") +'">'+ (SCANNED[scanned]||scanned) +"</span>";
+  if(f&128)h+='<span class="badge b-green">项目</span>';
+  if(f&4)h+='<span class="badge b-red">疑似敏感</span>';
+  if(f&1)h+='<span class="badge b-red">拒绝访问</span>';
+  if(f&32)h+='<span class="badge b-yellow">大小不完整</span>';
+  if(f&2)h+='<span class="badge b-purple">链接</span>';
+  if(f&64)h+='<span class="badge b-gray">规则排除</span>';
+  return h;
+}
+function attrsText(a){
+  if(a==null) return "—";
+  return ATTR_BITS.filter(b=>a&b[0]).map(b=>b[1]).join("、")||"普通";
+}
+function toast(t){
+  const el=$("#toast");el.textContent=t;el.style.opacity=1;
+  clearTimeout(el._t);el._t=setTimeout(()=>el.style.opacity=0,2200);
+}
+async function api(path){
+  const r=await fetch(path);
+  const j=await r.json();
+  if(j && j.ok===false) throw new Error(j.error||("HTTP "+r.status));
+  return j;
+}
+async function copyText(t){
+  try{await navigator.clipboard.writeText(t);return true;}
+  catch(e){
+    try{
+      const ta=document.createElement("textarea");ta.value=t;ta.style.position="fixed";ta.style.opacity="0";
+      document.body.appendChild(ta);ta.select();
+      const ok=document.execCommand("copy");ta.remove();return ok;
+    }catch(e2){return false;}
+  }
+}
+function showModal(html){$("#modalBox").innerHTML=html+'<div style="text-align:right;margin-top:14px"><button class="btn primary" onclick="closeModal()">我知道了</button></div>';$("#modal").style.display="flex";}
+function closeModal(){$("#modal").style.display="none";}
+function openFolder(path){
+  if(window.HAS_HELPER){
+    fetch("/api/open?path="+encodeURIComponent(path))
+      .then(r=>r.json()).then(j=>{
+        if(j.ok) toast("已在 Windows 资源管理器中打开");
+        else toast("打开失败："+(j.error||"未知错误"));
+      }).catch(()=>fallbackOpen(path));
+  }else fallbackOpen(path);
+}
+function fallbackOpen(path){
+  copyText(path).then(ok=>{
+    showModal('<h3>📂 打开所在文件夹</h3>'+
+      '<p>请通过 <b>启动文件地图.bat</b> 启动本地服务后使用此按钮（网页直开模式下浏览器安全限制不允许调起资源管理器）。</p>'+
+      '<p>已复制路径'+(ok?"成功":"（请手动选择复制）")+'：</p>'+
+      '<p class="mono" style="background:#f1f5f9;padding:8px;border-radius:6px;word-break:break-all">'+esc(path)+'</p>'+
+      '<p>也可以打开「此电脑」，把路径粘贴到顶部地址栏后回车。</p>');
+  });
+}
+function fileLink(path){
+  if(!path) return "";
+  return "file:///"+encodeURI(path.replace(/\\/g,"/")).replace(/#/g,"%23").replace(/\?/g,"%3F");
+}
+function hlEsc(text,term){
+  let h=esc(text);
+  if(!term)return h;
+  const lt=esc(term).toLowerCase(),lh=h.toLowerCase();
+  let out="",i=0,idx;
+  while((idx=lh.indexOf(lt,i))>=0){
+    out+=h.slice(i,idx)+"<span class='mark'>"+h.slice(idx,idx+lt.length)+"</span>";i=idx+lt.length;
+  }
+  return out+h.slice(i);
+}
+
+/* ==================== 框架 ==================== */
+let curPage="overview";
+function initTabs(){
+  document.querySelectorAll("nav button").forEach(b=>{
+    b.addEventListener("click",()=>{
+      document.querySelectorAll("nav button").forEach(x=>x.classList.remove("on"));
+      b.classList.add("on");curPage=b.dataset.page;render();
+    });
+  });
+}
+function render(){
+  if(curPage==="overview")pageOverview();
+  else if(curPage==="tree")pageTree();
+  else if(curPage==="projects")pageProjects();
+  else if(curPage==="search")pageSearch();
+  else if(curPage==="risk")pageRisk();
+  window.scrollTo(0,0);
+}
+
+/* ==================== 页面一：电脑总览 ==================== */
+function pageOverview(){
+  const st=SUMMARY.stats||{},dr=SUMMARY.drives||[];
+  const main_=`
+  <div id="liveBox"></div>
+  <div class="notice">📖 本地图由<b>全量只读递归扫描</b>生成：所有本地固定磁盘逐级枚举到最深一层，
+   没有条目数/深度上限；只有回收站、卷影副本和确实无法访问的位置被排除并逐条记录原因。
+   系统目录、软件目录、node_modules 等均保留完整树与清单（只读元数据，不读取文件内容）。</div>
+  <div class="cards">
+    <div class="stat"><div class="v">${fmtInt(st.rows)}</div><div class="k">数据库记录总条目</div></div>
+    <div class="stat"><div class="v">${fmtInt(st.dirs)}</div><div class="k">文件夹（含磁盘根）</div></div>
+    <div class="stat"><div class="v">${fmtInt(st.files)}</div><div class="k">文件</div></div>
+    <div class="stat"><div class="v">${fmtSize(st.bytes)}</div><div class="k">实测数据量合计</div></div>
+    <div class="stat"><div class="v">${fmtInt(st.projects)}</div><div class="k">识别出的项目</div></div>
+    <div class="stat"><div class="v">${fmtInt(st.pending)}</div><div class="k">待识别代码目录</div></div>
+  </div>
+  <div class="card"><h2>✅ 扫描完成度（三层区分）</h2>
+    <table>
+      <tr><th>层级</th><th>结果</th></tr>
+      <tr><td>① 目录枚举</td><td>完成 <b>${fmtInt(st.dirs_done)}</b> 个目录；失败 <b class="mono">${fmtInt(st.dirs_fail)}</b>；规则排除 <b>${fmtInt(st.dirs_excl)}</b>；中断 ${fmtInt(st.dirs_part)}；已消失 ${fmtInt(st.dirs_gone)}</td></tr>
+      <tr><td>② 文件元数据</td><td>成功读取 <b>${fmtInt(st.files_meta_ok)}</b> 个文件的大小/时间/属性；失败 <b class="mono">${fmtInt(st.files_meta_fail)}</b></td></tr>
+      <tr><td>③ 用途分析</td><td>识别项目 <b>${fmtInt(st.projects)}</b> 个；待识别 <b>${fmtInt(st.pending)}</b> 个（只依据标识文件与结构，未运行任何代码）</td></tr>
+    </table>
+    <p class="muted">错误分类：${Object.entries(st.events_by_kind||{}).map(([k,v])=>(ERR_LABELS[k]||k)+" "+fmtInt(v)).join("　")||"无"}</p>
+  </div>
+  <div class="card"><h2>💾 磁盘与覆盖情况</h2>
+    <table><tr><th>磁盘</th><th>类型</th><th>总容量</th><th>可用空间</th><th>实测数据量</th><th>目录</th><th>文件</th><th>状态</th></tr>
+    ${dr.map(d=>{
+      const used=(d.total!=null&&d.free!=null)?d.total-d.free:null;
+      const pct=used&&d.total?Math.round(used/d.total*100):0;
+      return `<tr><td><b>${d.letter}:</b></td><td>${esc(d.type)}</td>
+        <td>${d.total!=null?fmtSize(d.total):"—"}<div class="bar"><i style="width:${pct}%"></i></div></td>
+        <td>${d.free!=null?fmtSize(d.free):"—"}</td>
+        <td>${fmtSize(d.bytes)}</td><td>${fmtInt(d.dirs)}</td><td>${fmtInt(d.files)}</td>
+        <td>${d.scanned?'<span class="badge b-green">已全量枚举</span>':'<span class="badge b-gray">未扫描</span> '+esc(d.note||"")}</td></tr>`;
+    }).join("")}</table>
+  </div>
+  <div class="card"><h2>📁 占用空间最大的目录 TOP12（实测汇总）</h2>
+    <table><tr><th>大小</th><th>路径</th></tr>
+    ${(SUMMARY.risk_top||[]).map(d=>`<tr><td style="white-space:nowrap"><b>${fmtSize(d.s)}</b>${d.est?'<span class="badge b-yellow">下限</span>':""}</td>
+      <td class="mono">${esc(d.p)}</td></tr>`).join("")}</table>
+  </div>
+  <div class="card"><h2>🏷️ 一级目录类别分布（按实测大小）</h2>
+    ${(SUMMARY.cat_sizes||[]).slice(0,10).map(c=>`<div style="display:flex;align-items:center;gap:8px;margin:4px 0">
+      <div style="width:110px">${catBadge(c.c)}</div>
+      <div style="flex:1"><div class="bar"><i style="width:${Math.max(2,Math.round(c.s/((SUMMARY.cat_sizes[0]||{s:1}).s||1)*100))}%"></i></div></div>
+      <div style="width:90px;text-align:right" class="muted">${fmtSize(c.s)}</div></div>`).join("")}
+  </div>
+  <div class="card"><h2>📄 配套报告</h2>
+    <ul>
+      <li><a href="文件地图说明.md">文件地图说明.md</a> —— 使用说明</li>
+      <li><a href="扫描范围与遗漏.md">扫描范围与遗漏.md</a> —— 三层完成度、排除清单、错误分类</li>
+      <li><a href="项目识别报告.md">项目识别报告.md</a> —— 项目与判断依据</li>
+      <li><a href="安全与整理建议.md">安全与整理建议.md</a> —— 仅建议，不执行任何操作</li>
+      <li>目录总览_第N部分.csv —— 完整清单分卷导出（每卷 100 万行）${(SUMMARY.csv_parts?[1]:[]).length?"（已生成 "+SUMMARY.csv_parts.parts+" 卷 / "+fmtInt(SUMMARY.csv_parts.rows)+" 行）":""}</li>
+    </ul>
+  </div>`;
+  main.innerHTML=main_;
+  refreshLive();
+}
+function refreshLive(){
+  fetch("/api/progress").then(r=>r.json()).then(j=>{
+    const box=document.getElementById("liveBox");
+    if(!box)return;
+    if(j&&j.ok&&j.phase&&["full-scan","resume","incremental","admin_retry","aggregate"].includes(j.phase)){
+      box.className="livebox";
+      box.innerHTML="🔄 <b>扫描进行中</b>（"+esc(j.phase)+"）：已完成目录 "+fmtInt(j.dirs_done)+
+        "，文件 "+fmtInt(j.files_done)+"，错误 "+JSON.stringify(j.errors||{})+
+        "，当前 <span class='mono'>"+esc(j.current||"")+"</span>。页面数据会随扫描推进不断更新，重新刷新即可。";
+    }
+  }).catch(()=>{});
+}
+
+/* ==================== 页面二：目录树 ==================== */
+const expanded=new Set();
+let selectedPath=null, curDrive=null;
+const kidsCache=new Map();   // path -> container element
+
+function pageTree(){
+  main.innerHTML=`
+  <div class="toolbar">
+    <label>磁盘：</label><select id="driveSel"></select>
+    <span class="hint">点击 ▸ 逐层展开（服务端分页加载，百万条目不卡）；点击行查看详情</span>
+  </div>
+  <div class="tree-wrap">
+    <div class="tree" id="treeRoot"></div>
+    <div class="detail" id="detail"><p class="muted">点击左侧任意条目查看完整路径、枚举状态、复制路径、打开文件夹等。</p></div>
+  </div>`;
+  const sel=$("#driveSel");
+  (SUMMARY.drives||[]).filter(d=>d.scanned).forEach(d=>{
+    const o=document.createElement("option");
+    o.value=d.letter+":\\";o.textContent=d.letter+":\\（"+d.type+"，实测 "+fmtSize(d.bytes)+"）";
+    sel.appendChild(o);
+  });
+  if(!curDrive)curDrive=(SUMMARY.drives||[]).filter(d=>d.scanned)[0]?.letter+":\\"||"C:\\";
+  sel.value=curDrive;
+  sel.addEventListener("change",()=>{curDrive=sel.value;kidsCache.clear();expanded.clear();render();});
+  const dv=kidsCache.get("__drive__"+curDrive);
+  const root=$("#treeRoot");
+  const head=document.createElement("div");
+  head.className="row";
+  head.innerHTML='<span class="tg"></span><span>💾</span><span class="nm">'+esc(curDrive)+'\\</span><span class="zh">磁盘根目录</span>';
+  root.appendChild(head);
+  const box=document.createElement("div");
+  root.appendChild(box);
+  loadChildren(curDrive, box);
+}
+function rowHtml(n){
+  const isDir=!!n.is_dir;
+  return '<span class="tg">'+(isDir?"▸":"·")+"</span>"+
+    "<span>"+(isDir?"📁":"📄")+"</span>"+
+    '<span class="nm" title="'+esc(n.name)+'">'+esc(n.name)+"</span>"+
+    '<span class="zh">'+esc(n.zh||"")+"</span>"+
+    "<span>"+flagBadges(n.flags,n.scanned)+"</span>"+
+    '<span class="sz">'+fmtSize(n.size)+"</span>"+
+    '<span class="sz">'+fmtTime(n.mtime)+"</span>";
+}
+async function loadChildren(path, container){
+  container.innerHTML='<div class="muted" style="padding:4px 20px">加载中…</div>';
+  try{
+    const j=await api("/api/children?path="+encodeURIComponent(path)+"&offset=0&limit=200");
+    container.innerHTML="";
+    kidsCache.set(path, container);
+    appendKids(j, container, path);
+  }catch(e){
+    container.innerHTML='<div class="muted">加载失败：'+esc(e.message)+"</div>";
+  }
+}
+function appendKids(j, container, path){
+  const frag=document.createDocumentFragment();
+  for(const n of j.items){
+    const row=document.createElement("div");
+    row.className="row"+(selectedPath===n.path?" sel":"");
+    row.dataset.path=n.path;
+    row.innerHTML=rowHtml(n);
+    row.addEventListener("click",e=>{
+      if(e.target.classList.contains("tg")&&n.is_dir){toggleNode(n,row);return;}
+      selectedPath=n.path;
+      document.querySelectorAll(".row.sel").forEach(r=>r.classList.remove("sel"));
+      row.classList.add("sel");
+      showDetail(n.path);
+    });
+    frag.appendChild(row);
+    if(n.is_dir&&expanded.has(n.path)){
+      const kids=document.createElement("div");
+      kids.className="kids";
+      frag.appendChild(kids);
+      loadChildren(n.path, kids);
+    }
+  }
+  container.appendChild(frag);
+  if(j.offset+j.limit < j.total){
+    const more=document.createElement("div");
+    more.className="more";
+    more.textContent="显示更多（还有 "+fmtInt(j.total-j.offset-j.limit)+" 项…）";
+    more.addEventListener("click",async e=>{
+      e.stopPropagation();
+      more.textContent="加载中…";
+      try{
+        const j2=await api("/api/children?path="+encodeURIComponent(path)+
+          "&offset="+more._off+"&limit=200");
+        more.remove();
+        appendKids(j2, container, path);
+      }catch(err){more.textContent="加载失败："+err.message;}
+    });
+    more._off=j.offset+j.limit;
+    container.appendChild(more);
+  }
+}
+function toggleNode(n, row){
+  const p=n.path;
+  const next=row.nextElementSibling;
+  if(expanded.has(p)){
+    expanded.delete(p);
+    kidsCache.delete(p);
+    if(next&&next.classList&&next.classList.contains("kids"))next.remove();
+    row.querySelector(".tg").textContent="▸";
+  }else{
+    expanded.add(p);
+    const kids=document.createElement("div");
+    kids.className="kids";
+    row.after(kids);
+    row.querySelector(".tg").textContent="▾";
+    loadChildren(p, kids);
+  }
+}
+async function showDetail(path){
+  let d=$("#detail");
+  if(!d)return;
+  d.innerHTML='<p class="muted">加载中…</p>';
+  let j;
+  try{j=await api("/api/node?path="+encodeURIComponent(path));}
+  catch(e){d.innerHTML='<p class="muted">'+esc(e.message)+"</p>";return;}
+  const n=j.node, p=j.project;
+  const isDir=!!n.is_dir;
+  let h='<h2 style="margin-top:0">'+(isDir?"📁":"📄")+" "+esc(n.name)+"</h2>";
+  h+='<p>'+(n.zh?esc(n.zh):'<span class="muted">（无中文说明）</span>')+"</p>";
+  h+="<p>"+catBadge(n.cat)+(n.conf?' <span class="badge b-yellow">置信度:'+esc(n.conf)+"</span>":"")+
+     flagBadges(n.flags,n.scanned)+"</p>";
+  h+='<div class="path">'+esc(n.path)+"</div>";
+  h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0">'+
+     '<button class="btn" id="dCopy">📋 复制完整路径</button>'+
+     '<button class="btn" id="dOpen">📂 打开所在文件夹</button>'+
+     (isDir?'<a class="btn" href="'+fileLink(n.path)+'">🌐 浏览器打开</a>':'<button class="btn" id="dLoc">🌳 在目录树中定位</button>')+"</div>";
+  h+="<table>"+
+    '<tr><th>枚举状态</th><td><span class="badge '+(SCANNED_CLS[n.scanned]||"b-gray")+'">'+(SCANNED[n.scanned]||n.scanned)+"</span>"+
+      (n.err?" <span class='mono'>"+esc(n.err)+"</span>":"")+"</td></tr>"+
+    "<tr><th>类型</th><td>"+(isDir?"目录":"文件")+"（属性："+attrsText(n.attrs)+"）</td></tr>"+
+    "<tr><th>大小</th><td><b>"+fmtSize(n.size)+"</b>"+((n.flags&32)?"（子树含无法访问部分，此为已确认部分的下限）":"")+"</td></tr>"+
+    "<tr><th>创建时间</th><td>"+fmtTime(n.ctime)+"</td></tr>"+
+    "<tr><th>最后修改</th><td>"+fmtTime(n.mtime)+"</td></tr>"+
+    "<tr><th>所在磁盘</th><td>"+esc((n.path||"").slice(0,2))+"</td></tr>";
+  if(n.n_children!=null)h+="<tr><th>子条目数</th><td>"+fmtInt(n.n_children)+"（树中分页展示全部）</td></tr>";
+  if(n.link_target)h+='<tr><th>链接目标</th><td class="mono">'+esc(n.link_target)+
+    ' <button class="btn mini" id="dGoTarget">查看目标</button>（未跟随，防循环）</td></tr>';
+  h+="</table>";
+  if(p){
+    h+="<h3>🧩 项目信息（识别依据）</h3><table>"+
+      "<tr><th>项目类型</th><td>"+esc(kb_typezh(p.ptype))+' <span class="badge b-yellow">置信度:'+esc(p.conf)+"</span></td></tr>"+
+      (p.git?"<tr><th>Git 仓库</th><td>是（存在 .git）</td></tr>":"")+
+      (p.brief?"<tr><th>项目说明</th><td>"+esc(p.brief)+"</td></tr>":"");
+    const J=k=>{try{return JSON.parse(p[k]||"[]")}catch(e){return[]}};
+    const rows2=[["主要入口","entry"],["配置文件","configs"],["源代码目录","srcs"],["文档目录","docs"],["依赖目录","deps"],["编译产物","builds"]];
+    for(const [lab,k] of rows2){const v=J(k);if(v.length)h+="<tr><th>"+lab+"</th><td>"+esc(v.join("、"))+"</td></tr>";}
+    h+="</table><details><summary>识别依据明细</summary><ul>"+
+      J("basis").map(b=>"<li>"+esc(b)+"</li>").join("")+"</ul></details>";
+  }
+  if(isDir&&n.n_children>0&&n.n_children<=2000){
+    h+='<h3>📋 子条目清单（前 50 / 共 '+fmtInt(n.n_children)+'）</h3><div id="dKids" class="muted">加载中…</div>';
+  }
+  d.innerHTML=h;
+  $("#dCopy").addEventListener("click",()=>copyText(n.path).then(ok=>toast(ok?"路径已复制："+n.path:"复制失败，可单击路径文本全选后 Ctrl+C")));
+  $("#dOpen").addEventListener("click",()=>openFolder(n.path));
+  const gt=$("#dGoTarget");
+  if(gt)gt.addEventListener("click",()=>{locateInTree(n.link_target);});
+  const dl=$("#dLoc");
+  if(dl)dl.addEventListener("click",()=>locateInTree(n.path));
+  if(isDir&&n.n_children>0&&n.n_children<=2000){
+    api("/api/children?path="+encodeURIComponent(n.path)+"&limit=50").then(j2=>{
+      const box=$("#dKids");if(!box)return;
+      box.innerHTML='<table><tr><th>名称</th><th>说明</th><th>大小</th></tr>'+
+        j2.items.map(x=>'<tr><td>'+(x.is_dir?"📁":"📄")+" "+esc(x.name)+"</td><td class='muted'>"+
+        esc(x.zh||"")+"</td><td>"+fmtSize(x.size)+"</td></tr>").join("")+"</table>"+
+        (j2.total>j2.limit?'<p class="muted">完整清单请在左侧目录树展开查看（分页加载）。</p>':"");
+    }).catch(()=>{});
+  }
+}
+function kb_typezh(t){
+  const M={"maven":"Java 项目（Maven）","springboot":"Spring Boot 项目","gradle":"Java/Kotlin 项目（Gradle）",
+    "nodejs":"Node.js 项目","vue":"Vue 前端项目","react":"React 前端项目","electron":"Electron 应用",
+    "python":"Python 项目","django":"Python（Django）","rust":"Rust 项目","go":"Go 项目",
+    "dotnet":"C#/.NET 项目","php":"PHP 项目","gitrepo":"Git 仓库","static":"静态网页","unknown":"待识别"};
+  return M[t]||t;
+}
+async function locateInTree(path){
+  curPage="tree";
+  document.querySelectorAll("nav button").forEach(x=>x.classList.toggle("on",x.dataset.page==="tree"));
+  const parts=path.split("\\").filter(x=>x!=="");
+  let acc=parts[0]+"\\";
+  selectedPath=path;
+  pageTree();
+  for(let i=1;i<parts.length;i++){
+    acc=acc.replace(/\\+$/,"")+"\\"+parts[i];
+    for(let t=0;t<20;t++){
+      const row=Array.from(document.querySelectorAll(".row")).find(r=>r.dataset.path===acc);
+      if(row){break;}
+      await new Promise(r=>setTimeout(r,120));
+    }
+    const row=Array.from(document.querySelectorAll(".row")).find(r=>r.dataset.path===acc);
+    if(row&&row.querySelector(".tg").textContent==="▸"){
+      row.querySelector(".tg").click();
+      await new Promise(r=>setTimeout(r,200));
+    }
+  }
+  for(let t=0;t<20;t++){
+    const row=Array.from(document.querySelectorAll(".row")).find(r=>r.dataset.path===path);
+    if(row){row.scrollIntoView({block:"center"});row.classList.add("flash");break;}
+    await new Promise(r=>setTimeout(r,120));
+  }
+}
+
+/* ==================== 页面三：项目地图 ==================== */
+let projFilter="all";
+async function pageProjects(){
+  main.innerHTML='<div class="muted">加载项目数据…</div>';
+  try{
+    const [okJ, pendJ] = await Promise.all([
+      api("/api/projects?kind=ok"), api("/api/projects?kind=pending")]);
+    const projects=okJ.items||[], pending=pendJ.items||[];
+    const types=[...new Set(projects.map(p=>kb_typezh(p.ptype)))];
+    const shown=projFilter==="all"?projects:projects.filter(p=>kb_typezh(p.ptype)===projFilter);
+    main.innerHTML=`
+    <div class="notice">🧩 项目通过<b>标识文件与目录结构</b>识别（pom.xml / package.json / go.mod / .git / README 等），
+     全程未运行任何项目代码。<b>“识别到”不等于“可以正常运行”。</b></div>
+    <div class="chips">
+      <span class="chip ${projFilter==="all"?"on":""}" data-f="all">全部（${projects.length}）</span>
+      ${types.map(t=>`<span class="chip ${projFilter===t?"on":""}" data-f="${esc(t)}">${esc(t)}（${projects.filter(p=>kb_typezh(p.ptype)===t).length}）</span>`).join("")}
+    </div>
+    <div class="pgrid">
+    ${shown.slice(0,300).map(p=>{
+      const J=k=>{try{return JSON.parse(p[k]||"[]")}catch(e){return[]}};
+      const confB=p.conf==="高"?"b-green":p.conf==="中"?"b-yellow":"b-gray";
+      return `<div class="pcard">
+        <div class="t">${esc(p.name)} <span class="badge ${confB}">${esc(kb_typezh(p.ptype))}·置信度${esc(p.conf)}</span>
+        ${p.git?'<span class="badge b-cyan">Git</span>':""}</div>
+        <div class="kv"><b>路径：</b><span class="mono">${esc(p.path)}</span></div>
+        ${p.brief?`<div class="kv"><b>说明：</b>${esc(p.brief.slice(0,160))}</div>`:""}
+        <div class="kv"><b>大小：</b>${fmtSize(p.size)}　<b>修改：</b>${fmtTime(p.mtime)}</div>
+        ${J("entry").length?`<div class="kv"><b>入口：</b>${esc(J("entry").join("；"))}</div>`:""}
+        ${J("configs").length?`<div class="kv"><b>配置：</b>${esc(J("configs").join("、"))}</div>`:""}
+        ${J("srcs").length?`<div class="kv"><b>源码目录：</b>${esc(J("srcs").join("、"))}</div>`:""}
+        ${J("deps").length?`<div class="kv"><b>依赖目录：</b>${esc(J("deps").join("、"))}</div>`:""}
+        <details><summary>识别依据（${J("basis").length} 条）</summary>
+          <ul style="margin:6px 0 0;padding-left:18px">${J("basis").map(b=>`<li class="kv">${esc(b)}</li>`).join("")}</ul></details>
+        <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn" data-copy="${esc(p.path)}">📋 复制路径</button>
+          <button class="btn" data-open="${esc(p.path)}">📂 打开文件夹</button>
+          <button class="btn" data-loc="${esc(p.path)}">🌳 在目录树中定位</button>
+        </div></div>`;
+    }).join("")}
+    </div>
+    ${shown.length>300?`<p class="muted">仅显示前 300 个，共 ${shown.length} 个；可用类型筛选缩小范围。</p>`:""}
+    <div class="card"><h2>❓ 待识别项目（疑似代码目录，用途需人工确认）</h2>
+      ${pending.length?`<table><tr><th>路径</th><th>大小</th><th>理由</th></tr>
+      ${pending.slice(0,100).map(p=>`<tr><td class="mono">${esc(p.path)}</td><td>${fmtSize(p.size)}</td>
+        <td>${esc((JSON.parse(p.basis||"[]")[0])||"")}</td></tr>`).join("")}</table>`:"<p class='muted'>（无）</p>"}
+    </div>`;
+    document.querySelectorAll(".chip").forEach(c=>c.addEventListener("click",()=>{projFilter=c.dataset.f;pageProjects();}));
+    document.querySelectorAll("[data-copy]").forEach(b=>b.addEventListener("click",()=>copyText(b.dataset.copy).then(ok=>toast(ok?"路径已复制":"复制失败"))));
+    document.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>openFolder(b.dataset.open)));
+    document.querySelectorAll("[data-loc]").forEach(b=>b.addEventListener("click",()=>locateInTree(b.dataset.loc)));
+  }catch(e){main.innerHTML='<div class="card">加载失败：'+esc(e.message)+"</div>";}
+}
+
+/* ==================== 页面四：全局搜索 ==================== */
+let searchSeq=0;
+function pageSearch(){
+  main.innerHTML=`
+  <div class="toolbar">
+    <input id="q" placeholder="搜索：中文说明 / 文件名 / 路径（服务端全文检索，可输入部分词）">
+    <button class="btn primary" id="qBtn">搜索</button>
+    <span class="hint" id="qHint"></span>
+  </div>
+  <div class="card"><div id="qRes"><p class="muted">输入关键词开始搜索。例如：下载、微信、pom、报考、keystore…</p></div></div>`;
+  const q=$("#q");
+  let tm=null;
+  q.addEventListener("input",()=>{clearTimeout(tm);tm=setTimeout(doSearch,300);});
+  q.addEventListener("keydown",e=>{if(e.key==="Enter")doSearch();});
+  $("#qBtn").addEventListener("click",doSearch);
+  q.focus();
+}
+async function doSearch(offset=0, keep=false){
+  const raw=$("#q").value.trim();
+  const res=$("#qRes"),hint=$("#qHint");
+  if(!raw){res.innerHTML='<p class="muted">输入关键词开始搜索。</p>';hint.textContent="";return;}
+  const seq=++searchSeq;
+  const t0=performance.now();
+  try{
+    const j=await api("/api/search?q="+encodeURIComponent(raw)+"&offset="+offset);
+    if(seq!==searchSeq)return;
+    const ms=Math.round(performance.now()-t0);
+    hint.textContent="共 "+fmtInt(j.total)+" 条匹配（"+ms+"ms）";
+    if(!j.items.length&&!keep){res.innerHTML='<p class="muted">没有找到匹配的条目，试试更短的关键词。</p>';return;}
+    const old=keep?res.querySelector("table"):null;
+    const tbl=document.createElement("table");
+    if(!keep){
+      res.innerHTML="";
+      tbl.innerHTML="<tr><th>名称</th><th>中文说明</th><th>类别</th><th>大小</th><th>路径</th><th>操作</th></tr>";
+      res.appendChild(tbl);
+    }
+    const frag=document.createDocumentFragment();
+    for(const n of j.items){
+      const tr=document.createElement("tr");
+      tr.innerHTML=`<td style="white-space:nowrap">${n.is_dir?"📁":"📄"} <b>${hlEsc(n.name,raw)}</b>${flagBadges(n.flags,n.scanned)}</td>
+        <td>${hlEsc(n.zh||"",raw)}</td><td>${catBadge(n.cat)}</td>
+        <td style="white-space:nowrap">${fmtSize(n.size)}</td>
+        <td class="mono">${hlEsc(n.path,raw)}</td>
+        <td style="white-space:nowrap">
+          <button class="btn mini" data-copy="${esc(n.path)}">📋</button>
+          <button class="btn mini" data-open="${esc(n.path)}">📂</button>
+          ${n.is_dir?`<button class="btn mini" data-loc="${esc(n.path)}">🌳</button>`:""}
+        </td>`;
+      frag.appendChild(tr);
+    }
+    tbl.appendChild(frag);
+    const oldMore=res.querySelector(".more");if(oldMore)oldMore.remove();
+    if(j.offset+j.limit<j.total){
+      const more=document.createElement("div");
+      more.className="more";
+      more.textContent="加载更多（还有 "+fmtInt(j.total-j.offset-j.limit)+" 条…）";
+      more.addEventListener("click",()=>doSearch(j.offset+j.limit, true));
+      res.appendChild(more);
+    }
+    res.querySelectorAll("[data-copy]").forEach(b=>b.addEventListener("click",()=>copyText(b.dataset.copy).then(ok=>toast(ok?"路径已复制":"复制失败"))));
+    res.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>openFolder(b.dataset.open)));
+    res.querySelectorAll("[data-loc]").forEach(b=>b.addEventListener("click",()=>locateInTree(b.dataset.loc)));
+  }catch(e){hint.textContent="搜索失败："+e.message;}
+}
+
+/* ==================== 页面五：空间与风险 ==================== */
+async function pageRisk(){
+  main.innerHTML='<div class="muted">加载风险分析…</div>';
+  let R;
+  try{R=await api("/api/risk");}
+  catch(e){main.innerHTML='<div class="card">加载失败：'+esc(e.message)+"</div>";return;}
+  main.innerHTML=`
+  <div class="warnbox">⚠️ 本页面只做<b>分析展示</b>，没有任何删除或清理按钮，也没有执行任何修改。
+  “可疑”不等于“垃圾”——请先确认用途再决定如何处理。</div>
+  <div class="card"><h2>1️⃣ 占用空间最大的目录 TOP${R.bigdirs.length}（实测汇总，≥200MB）</h2>
+    <table><tr><th>大小</th><th>路径</th></tr>
+    ${R.bigdirs.map(d=>`<tr><td style="white-space:nowrap"><b>${fmtSize(d.s)}</b>${d.est?'<span class="badge b-yellow">下限</span>':""}</td>
+    <td class="mono">${esc(d.p)}</td></tr>`).join("")}</table>
+  </div>
+  <div class="card"><h2>2️⃣ 依赖与编译产物目录（可重建，删除前请确认）</h2>
+    <p class="muted">node_modules / target / build / dist / .m2 等，均为完整枚举过的真实大小。</p>
+    <table><tr><th>大小</th><th>路径</th><th>类型</th></tr>
+    ${R.depdirs.map(d=>`<tr><td style="white-space:nowrap"><b>${fmtSize(d.s)}</b></td>
+    <td class="mono">${esc(d.p)}</td><td>${catBadge(d.c)}</td></tr>`).join("")}</table>
+  </div>
+  <div class="card"><h2>3️⃣ 名称相似 / 可能多版本的目录组（${R.similar_groups.length} 组）</h2>
+    ${R.similar_groups.slice(0,60).map(g=>`
+      <div class="sec"><b>${esc(g.kind)}</b>「${esc(g.norm)}」<ul>${g.members.map(m=>`<li class="mono">${esc(m.path)}（${fmtSize(m.size)}）</li>`).join("")}</ul></div>`).join("")||'<p class="muted">（未发现）</p>'}
+  </div>
+  <div class="card"><h2>4️⃣ 重复文件候选（名称+大小一致，未计算哈希）</h2>
+    ${R.dup_candidates.length?`<table><tr><th>文件名</th><th>大小</th><th>份数</th><th>位置</th></tr>
+    ${R.dup_candidates.slice(0,50).map(d=>`<tr><td>${esc(d.name)}</td><td>${fmtSize(d.size)}</td><td>${d.count}</td>
+    <td>${d.paths.map(p=>`<div class="mono">${esc(p)}</div>`).join("")}</td></tr>`).join("")}</table>
+    <p class="muted">仅供参考：仅按名称与大小判断，未校验内容。</p>`
+    :'<p class="muted">（未发现名称+大小一致的 50MB 以上文件）</p>'}
+  </div>
+  <div class="card"><h2>5️⃣ 用途待确认的目录（已检查名称/结构/标识文件，证据仍不足）</h2>
+    ${R.unknown_dirs.length?`<ul>${R.unknown_dirs.map(u=>`<li class="mono">${esc(u.p)}（${fmtSize(u.s)}）</li>`).join("")}</ul>`
+    :'<p class="muted">（无）</p>'}
+  </div>
+  <div class="card"><h2>6️⃣ 疑似不完整 / 失效的项目</h2>
+    ${R.incomplete_projects.length?`<ul>${R.incomplete_projects.map(p=>`<li class="mono">${esc(p.path)} <span class="muted">（${esc(p.typezh)}）</span></li>`).join("")}</ul>`
+    :'<p class="muted">（无）</p>'}
+  </div>
+  <div class="card"><h2>7️⃣ 疑似敏感文件位置（仅路径，内容未读取）</h2>
+    <div id="sensBox"><button class="btn" id="sensBtn">点击展开（共 ${R.sens_files.length} 处）</button></div>
+  </div>`;
+  $("#sensBtn").addEventListener("click",()=>{
+    $("#sensBox").innerHTML='<ul>'+R.sens_files.map(p=>`<li class="mono">${esc(p)}</li>`).join("")+
+      '</ul><p class="muted">以上文件可能包含密钥/凭证，扫描器未读取其内容，请自行确认。</p>';
+  });
+}
+
+/* ==================== 启动 ==================== */
+async function boot(){
+  $("#foot").innerHTML="文件地图助手 v2 · 全量只读递归扫描 · 数据存储于本目录 SQLite 数据库（fmdata.db），"+
+    "可随时用 重新扫描.bat / --incremental 增量更新";
+  try{
+    SUMMARY = await api("/api/summary");
+  }catch(e){
+    main.innerHTML='<div class="card"><h2>需要先启动本地服务</h2>'+
+      '<p>未连接到扫描数据库（'+esc(e.message)+'）。请：</p>'+
+      '<p>1. 双击本目录的 <b>启动文件地图.bat</b>（会启动本地服务并自动打开本页）；</p>'+
+      '<p>2. 若还没扫描过，先双击 <b>重新扫描.bat</b> 生成 fmdata.db。</p>'+
+      '<p class="muted">v2 版数据量为全量盘点（可达数百万条），必须通过本地服务分页读取，不再支持直接双击 index.html 静态浏览。</p></div>';
+    $("#metaLine").textContent="未连接数据库";
+    return;
+  }
+  const st=SUMMARY.stats||{};
+  $("#metaLine").textContent="扫描时间："+(SUMMARY.scanned_at||"—")+" · 耗时 "+Math.round(SUMMARY.duration_s||0)+
+    " 秒 · 用户："+esc(SUMMARY.user||"")+" · 记录 "+fmtInt(st.rows)+" 条（目录 "+fmtInt(st.dirs)+" / 文件 "+fmtInt(st.files)+"）";
+  initTabs();
+  render();
+}
+boot();
+</script>
+</body>
+</html>
