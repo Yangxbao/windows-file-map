@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-文件地图助手 · 本地服务 v2 (serve.py)
+文件地图助手 · 本地服务 v3 (serve.py)
 =====================================
 在 127.0.0.1 上提供：
   1. index.html 网页与本目录静态文件；
@@ -8,10 +8,23 @@
      /api/summary  总览统计       /api/children?path=&offset=  分页子目录清单
      /api/node?path= 单条详情     /api/search?q=&offset=       服务端搜索
      /api/projects /api/risk /api/events /api/progress
-  3. /api/open —— 调用 Windows 资源管理器打开目录（白名单校验）。
+  3. /api/open —— 调用 Windows 资源管理器打开目录（白名单校验）；
+  4. 清理模块 API（只接受规则 ID，绝不接受路径）：
+     /api/clean/categories 规则与策略      /api/clean/scan 只读预览
+     /api/clean/run 执行清理               /api/clean/cancel 停止
+     /api/clean/status 实时进度            /api/clean/last 上次结果（含明细）
+     /api/clean/history 记录分页           /api/clean/log 逐文件日志（分页/筛选）
+     /api/clean/log.csv 导出 CSV           /api/clean/excludes 排除名单现状
 
 安全说明：仅监听 127.0.0.1；/api/open 只允许打开数据库中记录过的路径；
 数据库以只读方式打开；本服务不修改任何被扫描文件。
+
+v3 变更：
+  * 新增 last/history 分页/log 分页筛选/CSV 导出/excludes 等清理接口；
+  * do_GET 与清理 POST 增加兜底异常捕获：任何内部异常都返回 JSON 错误说明，
+    不再出现"连接被重置、前端只显示加载失败"的情况（v2 只捕获 sqlite3.Error）；
+  * DB_PATH 改为跟随 fm_scan，支持 FM_DB_PATH 重定向（仅供测试）；
+  * 支持 FM_NO_BROWSER=1（不自动弹浏览器）与 FM_PORT（测试固定端口）。
 """
 
 import os
@@ -27,12 +40,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fm_kb as kb
+import fm_scan
 import fm_clean
 
 TOOL_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(TOOL_DIR, "fmdata.db")
+DB_PATH = fm_scan.DB_PATH      # 与扫描/清理模块保持同一个库（支持 FM_DB_PATH 重定向）
 PROGRESS_PATH = os.path.join(TOOL_DIR, "scan_progress.json")
-PORT_START = 8618
+# 端口：默认 8618 起向后找空位；FM_PORT 仅供自动化测试固定端口
+PORT_START = int(os.environ.get("FM_PORT") or 8618)
 PORT = PORT_START  # main() 绑定成功后回写，用于 Host/Origin 校验
 
 MIME = {
@@ -270,15 +285,67 @@ class Handler(BaseHTTPRequestHandler):
     def api_clean_status(self):
         return self._json(fm_clean.status())
 
-    def api_clean_history(self):
-        return self._json({"ok": True, "items": fm_clean.get_history(50)})
+    def api_clean_last(self):
+        return self._json({"ok": True, "run": fm_clean.get_last_run()})
+
+    def api_clean_history(self, qs):
+        try:
+            offset = max(0, int((qs.get("offset") or ["0"])[0]))
+            limit = min(200, max(1, int((qs.get("limit") or ["50"])[0])))
+        except ValueError:
+            offset, limit = 0, 50
+        return self._json({"ok": True, "offset": offset, "limit": limit,
+                           "total": fm_clean.count_runs(),
+                           "items": fm_clean.get_history(limit, offset)})
 
     def api_clean_log(self, qs):
         try:
             run_id = int((qs.get("run_id") or ["0"])[0])
+            offset = max(0, int((qs.get("offset") or ["0"])[0]))
+            limit = min(1000, max(1, int((qs.get("limit") or ["200"])[0])))
         except ValueError:
             return self._json({"ok": False, "error": "run_id 不合法"}, 400)
-        return self._json({"ok": True, "items": fm_clean.get_run_log(run_id)})
+        status = (qs.get("status") or [""])[0] or None
+        items, total = fm_clean.get_run_log(run_id, limit, offset, status)
+        return self._json({"ok": True, "run_id": run_id, "offset": offset,
+                           "limit": limit, "total": total, "items": items})
+
+    def api_clean_log_csv(self, qs):
+        """/api/clean/log.csv?run_id= —— 导出整次运行的逐文件记录"""
+        try:
+            run_id = int((qs.get("run_id") or ["0"])[0])
+        except ValueError:
+            return self._json({"ok": False, "error": "run_id 不合法"}, 400)
+        import io
+        import csv as _csv
+        from datetime import datetime as _dt
+        buf = io.StringIO()
+        w = _csv.writer(buf)
+        w.writerow(["运行编号", "规则", "结果", "路径", "字节", "说明", "时间"])
+        st_map = {"deleted": "已删除", "skipped": "跳过", "failed": "失败",
+                  "dir_done": "目录已清理", "dir_partial": "目录部分清理"}
+        for r in fm_clean.iter_run_log(run_id):
+            ts = r.get("ts")
+            when = _dt.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S") if ts else ""
+            w.writerow([run_id, r.get("rule_id") or "", st_map.get(r.get("status"),
+                        r.get("status") or ""), r.get("path") or "",
+                        "" if r.get("size") is None else r.get("size"),
+                        r.get("reason") or "", when])
+        data = "\ufeff" + buf.getvalue()  # BOM：让 Excel 正确识别 UTF-8 中文
+        self.send_response(200)
+        self.send_header("Content-Type", "text/csv; charset=utf-8")
+        self.send_header("Content-Disposition",
+                         "attachment; filename=clean_run_%d.csv" % run_id)
+        self.send_header("Content-Length", str(len(data.encode("utf-8"))))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        try:
+            self.wfile.write(data.encode("utf-8"))
+        except OSError:
+            pass
+
+    def api_clean_excludes(self):
+        return self._json(dict(fm_clean.get_excludes_info(), ok=True))
 
     def do_POST(self):
         u = urllib.parse.urlparse(self.path)
@@ -321,14 +388,25 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"ok": False,
                                    "error": "未知的清理类别：%s" % "、".join(unknown)}, 400)
             if path == "/api/clean/scan":
-                result = fm_clean.scan(cats)
-                return self._json(result)
+                try:
+                    return self._json(fm_clean.scan(cats))
+                except Exception as e:               # noqa: BLE001
+                    import traceback
+                    traceback.print_exc()
+                    return self._json({"ok": False, "error": "预览扫描失败（%s）：%s"
+                                                             % (type(e).__name__, e)}, 500)
             # run 需要一次性确认已启用
             if not fm_clean.get_policy():
                 return self._json(
                     {"ok": False, "error": "尚未确认启用安全清理。请先在页面上查看清理范围并"
                                            "点击「启用安全清理」（一次性确认）。"}, 403)
-            return self._json(fm_clean.run(cats))
+            try:
+                return self._json(fm_clean.run(cats))
+            except Exception as e:                   # noqa: BLE001
+                import traceback
+                traceback.print_exc()
+                return self._json({"ok": False, "error": "启动清理失败（%s）：%s"
+                                                         % (type(e).__name__, e)}, 500)
 
         if path == "/api/clean/cancel":
             return self._json(fm_clean.cancel())
@@ -365,19 +443,34 @@ class Handler(BaseHTTPRequestHandler):
                 return self.api_clean_categories()
             if path == "/api/clean/status":
                 return self.api_clean_status()
+            if path == "/api/clean/last":
+                return self.api_clean_last()
             if path == "/api/clean/history":
-                return self.api_clean_history()
+                return self.api_clean_history(qs)
             if path == "/api/clean/log":
                 return self.api_clean_log(qs)
+            if path == "/api/clean/log.csv":
+                return self.api_clean_log_csv(qs)
+            if path == "/api/clean/excludes":
+                return self.api_clean_excludes()
             if path == "/api/open":
                 return self.api_open(qs)
             if path == "/api/ping":
-                return self._json({"ok": True, "helper": True})
+                return self._json({"ok": True, "helper": True, "port": PORT,
+                                   "db": os.path.basename(DB_PATH)})
             if path == "/server-mode.js":
                 return self._send(200, "window.HAS_HELPER=true;",
                                   "text/javascript; charset=utf-8")
         except sqlite3.Error as e:
             return self._json({"ok": False, "error": "数据库错误：%s" % e}, 500)
+        except Exception as e:                       # noqa: BLE001
+            # v3 只捕获 sqlite3.Error，其它异常会让连接直接断开，
+            # 前端只能显示"加载失败"且看不到任何原因。现在一律返回 JSON。
+            import traceback
+            traceback.print_exc()
+            return self._json({"ok": False,
+                               "error": "服务端内部错误（%s）：%s"
+                                        % (type(e).__name__, e)}, 500)
         # ---- 静态文件 ----
         rel = path.lstrip("/") or "index.html"
         f = os.path.abspath(os.path.join(TOOL_DIR, rel))
@@ -430,7 +523,8 @@ def main():
     print("  地址：%s" % url)
     print("  关闭此窗口即停止服务；扫描期间也可打开本页面实时查看进度。")
     print("=" * 54)
-    threading.Timer(0.8, lambda: webbrowser.open(url)).start()
+    if os.environ.get("FM_NO_BROWSER") != "1":
+        threading.Timer(0.8, lambda: webbrowser.open(url)).start()
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

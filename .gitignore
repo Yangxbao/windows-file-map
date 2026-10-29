@@ -20,3 +20,10 @@ fm_check*.py
 fm_dbg*.py
 fm_check*.py
 test_start.bat
+
+# 用户自己的排除名单（可能含个人路径，不入库；程序在文件不存在时按空名单处理）
+clean_excludes.txt
+
+# 临时调试脚本
+_t_*.py
+_t_*.js

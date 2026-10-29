@@ -45,7 +45,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fm_kb as kb
 
 TOOL_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(TOOL_DIR, "fmdata.db")
+# 数据库位置。FM_DB_PATH 仅供自动化测试把库重定向到临时文件，正常使用不要设置。
+DB_PATH = os.environ.get("FM_DB_PATH") or os.path.join(TOOL_DIR, "fmdata.db")
 PROGRESS_PATH = os.path.join(TOOL_DIR, "scan_progress.json")
 SUMMARY_PATH = os.path.join(TOOL_DIR, "scan_summary.json")
 
@@ -168,9 +169,13 @@ def read_head(path, cap):
 
 
 def clean_text(s):
-    """Windows 上极少数文件名含有无法按 UTF-8 编码的代理字符（\ud800-\udfff 孤立项），
-    SQLite 无法存储。此处把无法编码的字符替换为 �，其余保持原样。仅影响存储展示，
-    不触碰真实文件。"""
+    """Windows 上极少数文件名含有无法按 UTF-8 编码的代理字符（U+D800 到 U+DFFF 的
+    孤立项），SQLite 无法存储。此处把无法编码的字符替换为问号，其余保持原样。
+    仅影响存储展示，不触碰真实文件。
+
+    注意：本注释里绝不能出现反斜杠 u 加四位十六进制的写法——那会被 Python 当成
+    转义序列在编译期生成真正的孤立代理字符常量，Python 3.12+ 编译源代码时会直接
+    抛 UnicodeEncodeError（v3 曾因此在本机 Python 3.13 下完全无法 import）。"""
     try:
         s.encode("utf-8")
         return s
