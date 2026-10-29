@@ -1,16 +1,18 @@
 @echo off
-chcp 65001 >nul
 rem ============================================================
-rem  本机文件地图与一键清理助手 - 启动本地服务
-rem  关闭此窗口即停止服务。全程只读盘点；清理功能需在本工具
-rem  页面内单独启用（一次性确认），只清理白名单中的安全项目。
+rem  FileMap - local helper server (CN product name below)
+rem  CN name: BenJi WenJianDiTu yu YiJianQingLi ZhuShou
+rem  This starts the local server (127.0.0.1 only) and opens the
+rem  app in your browser. Close this window to stop the service.
+rem  NOTE: keep this .bat pure ASCII - cmd misparses UTF-8/GBK
+rem  batch files with Chinese text (offset bug after chcp).
 rem ============================================================
 cd /d "%~dp0"
 set PY=
 where python >nul 2>nul && set PY=python
 if not defined PY where py >nul 2>nul && set PY=py
 if not defined PY (
-  echo [错误] 未找到 Python 3，请先安装 Python 3。
+  echo [ERROR] Python 3 not found. Please install Python 3 first.
   pause
   exit /b 1
 )

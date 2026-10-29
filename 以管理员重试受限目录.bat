@@ -1,11 +1,13 @@
 @echo off
 rem ============================================================
-rem  FileMap Helper - admin retry for previously denied folders
+rem  FileMap - admin retry for previously denied folders
 rem  READ-ONLY: this only re-runs fm_scan.py --admin-retry, which
 rem  re-attempts enumeration of directories that failed with
 rem  "access denied" during the normal scan. It NEVER modifies,
 rem  moves or deletes any file, and never changes any ACL.
 rem  It will ask for Windows administrator approval (UAC).
+rem  NOTE: keep this .bat pure ASCII - cmd misparses UTF-8/GBK
+rem  batch files with Chinese text (offset bug after chcp).
 rem =================================================-----------
 cd /d "%~dp0"
 set PY=

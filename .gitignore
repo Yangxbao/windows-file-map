@@ -16,3 +16,7 @@ __pycache__/
 *.pyc
 fm_diag*.py
 fm_check*.py
+交接文档.md
+fm_dbg*.py
+fm_check*.py
+test_start.bat

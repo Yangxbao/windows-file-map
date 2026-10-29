@@ -1,20 +1,23 @@
 @echo off
-chcp 65001 >nul
 rem ============================================================
-rem  本机文件地图与一键清理助手 - 重新执行全量只读扫描
-rem  绝不修改/移动/删除任何原始文件；只更新本工具目录内的数据。
+rem  FileMap - full read-only rescan (CN: 重新扫描)
+rem  This NEVER modifies/moves/deletes any of your files.
+rem  It only writes data files inside this tool folder.
+rem  NOTE: keep this .bat pure ASCII - cmd misparses UTF-8/GBK
+rem  batch files with Chinese text (offset bug after chcp).
 rem ============================================================
 cd /d "%~dp0"
 set PY=
 where python >nul 2>nul && set PY=python
 if not defined PY where py >nul 2>nul && set PY=py
 if not defined PY (
-  echo [错误] 未找到 Python 3，请先安装 Python 3。
+  echo [ERROR] Python 3 not found. Please install Python 3 first.
   pause
   exit /b 1
 )
-echo 正在启动只读扫描（可能需要几分钟，期间可随时打开网页查看进度）...
+echo Starting read-only scan ... (a few minutes; you can open the
+echo web page any time to watch live progress)
 %PY% fm_scan.py
 echo.
-echo 扫描完成，可打开网页查看最新地图。
+echo Done. Start the app with: 启动文件地图.bat  (or: python serve.py)
 pause
